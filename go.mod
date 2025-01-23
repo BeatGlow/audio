@@ -1,4 +1,4 @@
-module github.com/beatglow/audio
+module github.com/BeatGlow/audio
 
 go 1.23.4
 

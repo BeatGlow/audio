@@ -9,11 +9,3 @@ type Format interface {
 	// BitsPerSample is the number of bits required to store one sample.
 	BitsPerSample() int
 }
-
-type Reader[T Sample] interface {
-	ReadAudio([]T) (int, error)
-}
-
-type Writer[T Sample] interface {
-	WriteAudio([]T) (int, error)
-}

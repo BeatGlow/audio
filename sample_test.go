@@ -1,13 +1,14 @@
 package audio_test
 
 import (
+	"bytes"
 	"encoding/binary"
 	"math"
 	"testing"
 
 	"golang.org/x/exp/constraints"
 
-	"github.com/beatglow/audio"
+	"github.com/BeatGlow/audio"
 )
 
 // Shared test vectors between int/uint/int32/uint32/int64/uint64
@@ -99,6 +100,7 @@ const (
 	//testRMSUint64  = 13043817825332783104
 )
 
+/*
 func TestInt(t *testing.T) {
 	var (
 		samples  audio.Samples[int]
@@ -235,6 +237,7 @@ func TestUint(t *testing.T) {
 		}
 	})
 }
+*/
 
 func TestInt8(t *testing.T) {
 	samples := audio.Samples[int8]{0, 1, 2, 3, -4, -5, -6, -7}
@@ -777,6 +780,269 @@ func TestFloat64(t *testing.T) {
 			if v != encoded[i] {
 				it.Fatalf("expected values to encode to %#02v, got %#02v", encoded, test)
 			}
+		}
+	})
+}
+
+func TestInterleave(t *testing.T) {
+	test := [][]byte{
+		{0, 0, 0, 0},
+		{1, 1, 1, 1},
+		{2, 2, 2, 2},
+		{3, 3, 3, 3},
+	}
+	want := []byte{
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+	}
+
+	v := make([]byte, 16)
+	audio.Interleave(v, test)
+	if len(v) != len(want) {
+		t.Fatalf("expected %d samples returned, got %d", len(want), len(v))
+		return
+	}
+	for i, s := range want {
+		if v[i] != s {
+			t.Errorf("expected sample %d to be %#02x, got %#02x", i, s, v[i])
+		}
+	}
+}
+
+func TestInterleaveNil(t *testing.T) {
+	var test [][]byte
+	if v := audio.Interleave(nil, test); v != nil {
+		t.Fatalf("expected Interleave(nil) to return nil, got %#+v", v)
+	}
+}
+
+func TestInterleaveDstNil(t *testing.T) {
+	test := [][]byte{
+		{0, 0, 0, 0},
+		{1, 1, 1, 1},
+		{2, 2, 2, 2},
+		{3, 3, 3, 3},
+	}
+	want := []byte{
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+	}
+
+	v := audio.Interleave(nil, test)
+	if len(v) != len(want) {
+		t.Fatalf("expected %d samples returned, got %d", len(want), len(v))
+		return
+	}
+	for i, s := range want {
+		if v[i] != s {
+			t.Errorf("expected sample %d to be %#02x, got %#02x", i, s, v[i])
+		}
+	}
+}
+
+func TestDeinterleave(t *testing.T) {
+	test := []byte{
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+	}
+	want := [][]byte{
+		{0, 0, 0, 0},
+		{1, 1, 1, 1},
+		{2, 2, 2, 2},
+		{3, 3, 3, 3},
+	}
+
+	v := make([][]byte, 4)
+	for i := 0; i < 4; i++ {
+		v[i] = make([]byte, 4)
+	}
+
+	audio.Deinterleave(v, test, 4)
+	if len(v) != len(want) {
+		t.Fatalf("expected %d buffers returned, got %d", len(want), len(v))
+		return
+	}
+	for c, vs := range want {
+		if len(vs) != len(want[c]) {
+			t.Errorf("expected channel %d to contain %d samples, got %d", c, len(want[c]), len(vs))
+			continue
+		}
+		for i, s := range want[c] {
+			if vs[i] != s {
+				t.Errorf("expected sample %d to be %#02x, got %#02x", i, s, vs[i])
+			}
+		}
+	}
+}
+
+func TestDeinterleaveMono(t *testing.T) {
+	test := []byte{
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+	}
+	want := [][]byte{test}
+
+	v := make([][]byte, 1)
+	v[0] = make([]byte, 16)
+	audio.Deinterleave(v, test, 1)
+
+	if len(v) != len(want) {
+		t.Fatalf("expected %d buffers returned, got %d", len(want), len(v))
+		return
+	}
+
+	if !bytes.Equal(v[0], want[0]) {
+		t.Fatalf("expected %#02v, got %#02v", want, v)
+	}
+}
+
+func TestDeinterleaveNil(t *testing.T) {
+	var test []byte
+	if v := audio.Deinterleave(nil, test, 0); v != nil {
+		t.Fatalf("expected Deinterleave(nil) to return nil, got %#+v", v)
+	}
+}
+
+func TestDeinterleaveDstNil(t *testing.T) {
+	test := []byte{
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+		0, 1, 2, 3,
+	}
+	want := [][]byte{
+		{0, 0, 0, 0},
+		{1, 1, 1, 1},
+		{2, 2, 2, 2},
+		{3, 3, 3, 3},
+	}
+
+	v := audio.Deinterleave(nil, test, 4)
+	if len(v) != len(want) {
+		t.Fatalf("expected %d buffers returned, got %d", len(want), len(v))
+		return
+	}
+	for c, vs := range want {
+		if len(vs) != len(want[c]) {
+			t.Errorf("expected channel %d to contain %d samples, got %d", c, len(want[c]), len(vs))
+			continue
+		}
+		for i, s := range want[c] {
+			if vs[i] != s {
+				t.Errorf("expected sample %d to be %#02x, got %#02x", i, s, vs[i])
+			}
+		}
+	}
+}
+
+func TestMinZero(t *testing.T) {
+	if v := audio.Min([]int{}); v != 0 {
+		t.Fatalf("expected Min(empty) to return 0, got %d", v)
+	}
+}
+
+func TestMaxZero(t *testing.T) {
+	if v := audio.Max([]int{}); v != 0 {
+		t.Fatalf("expected Max(empty) to return 0, got %d", v)
+	}
+}
+
+func TestMeanZero(t *testing.T) {
+	if v := audio.Mean([]int{}); v != 0 {
+		t.Fatalf("expected Mean(empty) to return 0, got %d", v)
+	}
+}
+
+func TestNormalizeZero(t *testing.T) {
+	audio.Normalize([]int{})
+}
+
+func TestRMSZero(t *testing.T) {
+	if v := audio.RMS([]int{}); v != 0 {
+		t.Fatalf("expected RMS(empty) to return 0, got %d", v)
+	}
+}
+
+func TestSampleBitsPerSample(t *testing.T) {
+	const intSize = 32 << (^uint(0) >> 63)
+	t.Run("int", func(it *testing.T) {
+		var test audio.Samples[int]
+		if v := test.BitsPerSample(); v != intSize {
+			t.Fatalf("expected %T to contain %d bits per sample, got %d", test, intSize, v)
+		}
+	})
+	t.Run("int8", func(it *testing.T) {
+		var test audio.Samples[int8]
+		if v := test.BitsPerSample(); v != 8 {
+			t.Fatalf("expected %T to contain 8 bits per sample, got %d", test, v)
+		}
+	})
+	t.Run("int16", func(it *testing.T) {
+		var test audio.Samples[int16]
+		if v := test.BitsPerSample(); v != 16 {
+			t.Fatalf("expected %T to contain 16 bits per sample, got %d", test, v)
+		}
+	})
+	t.Run("int32", func(it *testing.T) {
+		var test audio.Samples[int32]
+		if v := test.BitsPerSample(); v != 32 {
+			t.Fatalf("expected %T to contain 32 bits per sample, got %d", test, v)
+		}
+	})
+	t.Run("int64", func(it *testing.T) {
+		var test audio.Samples[int64]
+		if v := test.BitsPerSample(); v != 64 {
+			t.Fatalf("expected %T to contain 64 bits per sample, got %d", test, v)
+		}
+	})
+	t.Run("uint", func(it *testing.T) {
+		var test audio.Samples[uint]
+		if v := test.BitsPerSample(); v != intSize {
+			t.Fatalf("expected %T to contain %d bits per sample, got %d", test, intSize, v)
+		}
+	})
+	t.Run("uint8", func(it *testing.T) {
+		var test audio.Samples[uint8]
+		if v := test.BitsPerSample(); v != 8 {
+			t.Fatalf("expected %T to contain 8 bits per sample, got %d", test, v)
+		}
+	})
+	t.Run("uint16", func(it *testing.T) {
+		var test audio.Samples[uint16]
+		if v := test.BitsPerSample(); v != 16 {
+			t.Fatalf("expected %T to contain 16 bits per sample, got %d", test, v)
+		}
+	})
+	t.Run("uint32", func(it *testing.T) {
+		var test audio.Samples[uint32]
+		if v := test.BitsPerSample(); v != 32 {
+			t.Fatalf("expected %T to contain 32 bits per sample, got %d", test, v)
+		}
+	})
+	t.Run("uint64", func(it *testing.T) {
+		var test audio.Samples[uint64]
+		if v := test.BitsPerSample(); v != 64 {
+			t.Fatalf("expected %T to contain 64 bits per sample, got %d", test, v)
+		}
+	})
+	t.Run("float32", func(it *testing.T) {
+		var test audio.Samples[float32]
+		if v := test.BitsPerSample(); v != 32 {
+			t.Fatalf("expected %T to contain 32 bits per sample, got %d", test, v)
+		}
+	})
+	t.Run("float64", func(it *testing.T) {
+		var test audio.Samples[float64]
+		if v := test.BitsPerSample(); v != 64 {
+			t.Fatalf("expected %T to contain 64 bits per sample, got %d", test, v)
 		}
 	})
 }

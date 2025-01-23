@@ -12,17 +12,33 @@ type Sample interface {
 	constraints.Integer | constraints.Float
 }
 
-// Samples represents a mono audio buffer.
+// Samples represents a mono audio buffer, or a single channel.
 type Samples[T Sample] []T
 
-// Add sample to the slice.
-func Add[T Sample](buffer *Samples[T], sample T) {
-	*buffer = append(*buffer, sample)
+// Push adds samples to the slice.
+func Push[T Sample](buffer *Samples[T], samples ...T) {
+	*buffer = append(*buffer, samples...)
 }
 
-// Pop removes n samples from the start of the slice.
-func Pop[T Sample](buffer *Samples[T], n int) {
+// Pop removes one sample from the end of the slice.
+func Pop[T Sample](buffer *Samples[T]) T {
+	var removed T //nolint:gosimple
+	removed = (*buffer)[len(*buffer)-1]
+	*buffer = (*buffer)[:len(*buffer)-1]
+	return removed
+}
+
+// Shift removes n samples from the start of the slice.
+func Shift[T Sample](buffer *Samples[T], n int) Samples[T] {
+	var shifted Samples[T] //nolint:gosimple
+	shifted = (*buffer)[:n]
 	*buffer = (*buffer)[n:]
+	return shifted
+}
+
+// Unshift adds samples to the start of the slice.
+func Unshift[T Sample](buffer *Samples[T], samples ...T) {
+	*buffer = append(samples, *buffer...)
 }
 
 // Decodes values encoded in b using the specified byte order.
@@ -94,6 +110,7 @@ func (s Samples[T]) Decode(b []byte, order binary.ByteOrder) {
 	}
 }
 
+// Encode the sample slice as bytes in b.
 func (s Samples[T]) Encode(b []byte, order binary.ByteOrder) {
 	var zero T
 	switch any(zero).(type) {
@@ -162,8 +179,10 @@ func (s Samples[T]) Encode(b []byte, order binary.ByteOrder) {
 	}
 }
 
+// intSize is the number of bits used by the int/uint type, dependent on CPU architecture
 const intSize = 32 << (^uint(0) >> 63)
 
+// BitsPerSample is the number of bits required to store one sample.
 func (s Samples[T]) BitsPerSample() int {
 	var zero T
 	switch any(zero).(type) {
@@ -186,9 +205,36 @@ func (s Samples[T]) BitsPerSample() int {
 	}
 }
 
-// Buffer is a double slice of samples.
+// Buffer represents a multi channel audio buffer.
 type Buffer[T Sample] [][]T
 
+// Channels is the number of channels in the buffer.
+func (b Buffer[T]) Channels() int {
+	return len(b)
+}
+
+// Samples is the number of samples per channel.
+func (b Buffer[T]) Samples() int {
+	if len(b) == 0 {
+		return 0
+	}
+
+	min := len(b[0])
+	for _, samples := range b[1:] {
+		if l := len(samples); l < min {
+			min = l
+		}
+	}
+	return min
+}
+
+// BitsPerSample is the number of bits required to store one sample.
+func (b Buffer[T]) BitsPerSample() int {
+	var zero Samples[T]
+	return zero.BitsPerSample()
+}
+
+// minOfType returns the minimum value for the given type.
 func minOfType[T Sample](value T) T {
 	switch any(value).(type) {
 	case int:
@@ -218,6 +264,7 @@ func minOfType[T Sample](value T) T {
 	}
 }
 
+// maxOfType returns the maximum value for the given type.
 func maxOfType[T Sample](value T) T {
 	switch any(value).(type) {
 	case int:
@@ -389,4 +436,58 @@ func Normalize[T Sample](samples Samples[T]) {
 	for i := range samples {
 		samples[i] /= max
 	}
+}
+
+// Deinterleave splits interleaved samples into a multi channel buffer.
+//
+// The provided buffer dst should be nil, or adequately sized to fit channels of samples.
+func Deinterleave[T Sample](dst Buffer[T], src Samples[T], channels int) Buffer[T] {
+	// Fast path
+	if channels == 0 {
+		return nil
+	}
+
+	samples := len(src) / channels
+
+	if dst == nil {
+		dst = make(Buffer[T], channels)
+		for i := 0; i < channels; i++ {
+			dst[i] = make(Samples[T], samples)
+		}
+	}
+
+	if channels == 1 {
+		copy(dst[0], src)
+	} else {
+		for i, sample := range src {
+			dst[i%channels][i/channels] = sample
+		}
+	}
+
+	return dst
+}
+
+// Interleave a buffer into a single samples slice.
+//
+// The provided samples dst should be nil, or adequately sized to fit channels of samples.
+func Interleave[T Sample](dst Samples[T], src Buffer[T]) Samples[T] {
+	if len(src) == 0 {
+		return dst
+	}
+
+	channels := len(src)
+	samples := len(src[0])
+
+	if dst == nil {
+		dst = make(Samples[T], channels*samples)
+	}
+
+	for i := 0; i < samples; i++ {
+		o := i * channels
+		for c := 0; c < channels; c++ {
+			dst[o+c] = src[c][i]
+		}
+	}
+
+	return dst
 }
