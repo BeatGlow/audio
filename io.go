@@ -3,7 +3,6 @@ package audio
 import (
 	"encoding/binary"
 	"io"
-	"log"
 )
 
 // Reader can read samples.
@@ -78,7 +77,6 @@ func (s Samples[T]) DecodeFromChunked(r io.Reader, order binary.ByteOrder, chunk
 		if _, err = r.Read(buf); err != nil {
 			return
 		}
-		log.Printf("decode %T %d:%d from %d bytes", s, n, n+chunkSize, len(buf))
 		s[n:n+chunkSize].Decode(buf, order)
 	}
 
@@ -88,7 +86,6 @@ func (s Samples[T]) DecodeFromChunked(r io.Reader, order binary.ByteOrder, chunk
 		if _, err = r.Read(buf); err != nil {
 			return
 		}
-		log.Printf("decode %T %d:%d from %d bytes remaining", s, n, n+remain, len(buf))
 		s[n:n+remain].Decode(buf, order)
 		n += remain
 	}

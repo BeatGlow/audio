@@ -1,7 +1,6 @@
 package ioctl
 
 import (
-	"log"
 	"reflect"
 	"syscall"
 )
@@ -34,7 +33,6 @@ func IORData(t, nr uintptr, data interface{}) uintptr {
 	var size uintptr
 	if data != nil {
 		size = reflect.TypeOf(data).Elem().Size()
-		log.Printf("size of %T is %d", data, size)
 	}
 	return IOR(t, nr, size)
 }
