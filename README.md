@@ -21,7 +21,7 @@ func main() {
     }
     defer func() { _ = f.Close() }()
 
-    // Allocate a buffer of 1024 flaot64 samples.
+    // Allocate a buffer of 1024 float64 samples.
     samples := make(audio.Samples[float64], 1024)
 
     r := audio.NewReader[float64](f, binary.BigEndian)
